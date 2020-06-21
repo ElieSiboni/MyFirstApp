@@ -1,5 +1,7 @@
 package com.example.myfirstapp;
 
+import android.content.Context;
+import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.widget.Toast;
 
@@ -10,8 +12,9 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.reflect.TypeToken;
 
-import java.util.ArrayList;
+import java.lang.reflect.Type;
 import java.util.List;
 
 import retrofit2.Call;
@@ -27,13 +30,38 @@ public class MainActivity extends AppCompatActivity {
     private RecyclerView recyclerView;
     private ListAdapter mAdapter;
     private RecyclerView.LayoutManager layoutManager;
+    private SharedPreferences sharedPreferences;
+    private Gson gson;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        makeApiCall();
+        sharedPreferences = getSharedPreferences("application_android", Context.MODE_PRIVATE);
+        gson = new GsonBuilder()
+                .setLenient()
+                .create();
+
+        List<Dogs> DogsList = getDataFromCache();
+
+        if (DogsList != null) {
+            showList(DogsList);
+        } else {
+                makeApiCall();
+            }
+        }
+
+
+    private List<Dogs> getDataFromCache() {
+        String jsonDogs = sharedPreferences.getString(Constants.KEY_DOGS_LIST, null);
+
+        if (jsonDogs == null) {
+            return null;
+        } else {
+            Type listType = new TypeToken<List<Dogs>>() {}.getType();
+            return gson.fromJson(jsonDogs, listType);
+        }
     }
 
     private void showList(List<Dogs> DogsList) {
@@ -48,10 +76,6 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void makeApiCall() {
-        Gson gson = new GsonBuilder()
-                .setLenient()
-                .create();
-
         Retrofit retrofit = new Retrofit.Builder()
                 .baseUrl(BASE_URL)
                 .addConverterFactory(GsonConverterFactory.create(gson))
@@ -65,6 +89,7 @@ public class MainActivity extends AppCompatActivity {
             public void onResponse(Call<RestDogResponse> call, Response<RestDogResponse> response) {
                 if (response.isSuccessful() && response.body() != null){
                     List<Dogs> DogsList = response.body().getMessage();
+                    savedList(DogsList);
                     showList(DogsList);
                 } else {
                     showError();    
@@ -76,6 +101,16 @@ public class MainActivity extends AppCompatActivity {
                 showError();
             }
         });
+    }
+
+    private void savedList(List<Dogs> DogsList) {
+        String jsonString = gson.toJson(DogsList);
+        sharedPreferences
+                .edit()
+                .putString(Constants.KEY_DOGS_LIST, jsonString)
+                .apply();
+
+        Toast.makeText(getApplicationContext(), "Liste sauvegardée", Toast.LENGTH_SHORT).show();
     }
 
     private void showError() {
